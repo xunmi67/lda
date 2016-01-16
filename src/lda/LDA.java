@@ -34,6 +34,8 @@ public class LDA {
      * @param dArray
      */
     public void fit(int[] wArray,int[] dArray){
+		this.wArray = wArray;
+		this.dArray = dArray;
         V = wArray[array_max(wArray)]+1;
         D = dArray[array_max(dArray)]+1;
 		zArray = new int[wArray.length];
@@ -91,7 +93,7 @@ public class LDA {
 		assert Math.abs(q[q.length-1] -1) < 0.0001;
 		double rd_d = rd.nextDouble();
 		for(int i=0;i<q.length;i++){
-			if(rd_d > q[i]) return i;
+			if(rd_d <= q[i]) return i;
 		}
 		return -1;
 	}
