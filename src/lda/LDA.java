@@ -178,7 +178,7 @@ public class LDA {
 		ArrayList<Integer> dArrayList = new ArrayList<>();
 		for(int d = 0;d<X.length;d++)
 			for(int w=0;w<X[0].length;w++)
-				for(int count=0;count<X[d][w];count--)
+				for(int count=0;count<X[d][w];count++)
 				{
 					wArrayList.add(w);
 					dArrayList.add(d);
