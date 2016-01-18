@@ -6,17 +6,13 @@ import org.apache.commons.math3.linear.*;
  */
 public class TestMatrix {
     public static void test1(){
-        double [][] d ={{0.1,0.2},{0.3,0.4}};
-        Array2DRowRealMatrix mat = new Array2DRowRealMatrix(d,false);
-        RealVector vec = mat.getRowVector(0);
-        vec.setEntry(0,9.0);
-        System.out.println(d.toString());
-        System.out.println(mat);
-        System.out.println(vec);
+        double [][] d =new double[][]{{0.1,0.2,0.3,},{0.3,0.4,0.5}};
+        double[] dd = {1,2,3};
+        // Array2DRowRealMatrix mat = new Array2DRowRealMatrix(d);
+        DiagonalMatrix dmat = new DiagonalMatrix(dd);
+        System.out.println(dmat);
     }
     public static void main(String argss[]){
-        int a = 9;
-        a /= 4-1;
-        System.out.println(a);
+        test1();
     }
 }

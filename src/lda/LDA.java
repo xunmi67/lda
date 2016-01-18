@@ -1,15 +1,15 @@
 package lda;
 
-import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Random;
 import org.apache.commons.math3.special.Gamma;
-import java.util.Arrays;
 import org.apache.commons.math3.linear.*;
 
 /**
  * Created by found on 1/15/16.
  */
 public class LDA {
+	int MAX_STEADY = 100;
     int[] wArray = null;
     int[] dArray = null;
     int[] zArray = null;
@@ -45,7 +45,9 @@ public class LDA {
         D = dArray[array_max(dArray)]+1;
 		zArray = new int[wArray.length];
 		theta = new double[D][K];
+		RealMatrix theta_mat = new Array2DRowRealMatrix(D,K);
 		phi = new double[K][V];
+		RealMatrix phi_mat = new Array2DRowRealMatrix(K,V);
 		sumK = new double[K];
 		this.n_k = new double[K];
 		this.n_d = new double[D];
@@ -66,6 +68,14 @@ public class LDA {
 		}
 		//start burnning
 		long t0 = System.currentTimeMillis();
+		boolean judgeSteady = false;
+		boolean isSteady = false;
+		double steadyCount = 0;
+		double lastTenLikehood = 0.0;
+		int lastAdded = 0;
+		double thisTenLikehood = 0.0;
+		int thisAdded = 0;
+		double previousLh = Double.NEGATIVE_INFINITY;
 		for(int sp=0;sp<nIter;sp++)
 		{
 			for(int i=0;i<wArray.length;i++){
@@ -78,23 +88,80 @@ public class LDA {
 				n_k[z]--;
 				n_d[d]--;
 				int newz = sampleFrom(calp(i));
+				zArray[i] = newz;
 				n_k_w[newz][w]++;
 				n_d_k[d][newz]++;
 				sumK[z]++;
 				n_k[z]++;
 				n_d[d]++;
 			}
-			if(sp%1 ==0 ){
-				// TODO:use logger
-				System.out.println("sampling "+sp+
-						" log likehood is:"+likehood());
-				long t1 = System.currentTimeMillis();
-				System.out.println("using time:"+(t1-t0)/1000.0);
-				t0 = t1;
+			if((sp%10 ==0 || judgeSteady) && !isSteady) {
+				if (judgeSteady) {
+					if(lastAdded<10){
+						lastTenLikehood += likehood();
+						lastAdded++;
+					}else if(thisAdded < 10){
+						thisTenLikehood += likehood();
+						thisAdded ++;
+					}else{
+						lastTenLikehood /= 10.0;
+						thisTenLikehood /= 10.0;
+						if(this.diff(lastTenLikehood,thisTenLikehood)<0.001||
+								thisTenLikehood<lastTenLikehood){
+							System.out.println(lastTenLikehood+" new:"+thisTenLikehood);
+							isSteady = true;
+							continue;
+						}
+						// TODO:use logger
+						System.out.println(lastTenLikehood+" new:"+thisTenLikehood);
+						lastTenLikehood = thisTenLikehood * 10;
+						thisAdded = 0;
+						thisTenLikehood = 0.0;
+					}
+				} else {
+					// TODO:use logger
+					double lh = likehood();
+					System.out.println("sampling " + sp +
+							"  likehood is:" + lh);
+					long t1 = System.currentTimeMillis();
+					System.out.println("using time:" + (t1 - t0) / 1000.0);
+					t0 = t1;
+					if (this.diff(previousLh,lh)<0.001 || lh < previousLh) {
+						judgeSteady = true;
+					}
+					previousLh = lh;
+				}
 			}
-		}
-
+			if(isSteady){
+				if(steadyCount < MAX_STEADY){
+					theta_mat = theta_mat.add(new Array2DRowRealMatrix(n_d_k));
+					phi_mat = phi_mat.add(new Array2DRowRealMatrix(n_k_w));
+					if(steadyCount % 10 ==0){
+						// TODO:use logger instead
+						System.out.println("steady process:sampling "+steadyCount);
+					}
+					steadyCount++;
+				}else{
+					break;
+				}
+			}
+		}//burning over
+		//start cal theta and phi
+		// TODO:use logger instead
+		System.out.println("starting cal theta");
+		theta_mat.scalarMultiply(1.0/steadyCount);
+		phi_mat.scalarMultiply(1.0/steadyCount);
+		theta_mat.scalarAdd(alpha);
+		phi_mat.scalarAdd(beta);
+		//phi_mat.sum(1). Get row sum of mat
+		RealVector theta_sum = theta_mat.operate(new ArrayRealVector(K,1.0));
+		RealVector phi_sum = phi_mat.operate(new ArrayRealVector(V,1.0));
+		theta_mat = new DiagonalMatrix(theta_sum.toArray()).multiply(theta_mat);
+		phi_mat = new DiagonalMatrix(phi_sum.toArray()).multiply(phi_mat);
+		this.theta = theta_mat.getData();
+		this.phi = phi_mat.getData();
     }
+
 
 	/**
 	 * cal log likehood of p(z,w)
@@ -102,6 +169,9 @@ public class LDA {
 	 * 	can reference to:https://github.com/ariddell/lda/blob/develop/lda/_lda.pyx
 	 * @return
      */
+	protected  double diff(double d1,double d2){
+		return Math.abs( (d2-d1) / d1 );
+	}
 	protected double likehood(){
 		double ll = 0.;
 		double lgamma_beta = Gamma.logGamma(beta);
@@ -116,7 +186,6 @@ public class LDA {
 			}
 
 		}
-		System.err.print("t");
 		//cal log p(z)
 		for(int d=0;d<D;d++){
 			ll += (Gamma.logGamma(alpha * K) -
@@ -129,17 +198,43 @@ public class LDA {
 		return ll;
 	}
 
+	protected double log_likehood(){
+		double ll = 0.;
+		Array2DRowRealMatrix n_k_w_mat =
+				new Array2DRowRealMatrix(n_k_w);
+		Array2DRowRealMatrix n_m_k_mat =
+				new Array2DRowRealMatrix(n_d_k);
+		ArrayRealVector beta_v = new ArrayRealVector(V,beta);
+		ArrayRealVector alpha_v = new ArrayRealVector(K,alpha);
+		for(int i=0;i<K;i++){
+			RealVector n_k_beta = n_k_w_mat.getRowVector(i).add(beta_v);
+			System.out.println("n_k+beta:"+n_k_beta);
+			ll += ( log_delta(n_k_beta.toArray()) - log_delta(beta_v.toArray()) );
+		}
+		double ll0 = ll;
+		System.out.println("p(w|z):"+ll);
+		for(int d=0;d < D;d++){
+			RealVector n_d_alpha = n_m_k_mat.getRowVector(d).add(alpha_v);
+			System.out.println("n_m+al:"+n_d_alpha);
+			ll += ( log_delta(n_d_alpha.toArray()) - log_delta(alpha_v.toArray()));
+		}
+		System.out.println("p(z):"+(ll-ll0));
+		return  ll;
+	}
 	/**
 	 * cal delta function(alpha), Δ(α)=ΣΓ(α_i) / Γ(Σα_i)
 	 * @param alpha
 	 * @return
      */
-	protected double delta(double[] alpha){
+	protected double log_delta(double[] alpha){
 		double result = 0.0;
-		for(double a_i:alpha){
-			result += Gamma.gamma(a_i);
+		for(int i=0;i<alpha.length;i++){
+			result += Gamma.logGamma(alpha[i]);
 		}
-		result /= Gamma.gamma(array_sum(alpha));
+		double sum_a = 0.;
+		for(double a_i:alpha)
+			sum_a += a_i;
+		result -= Gamma.logGamma(sum_a);
 		return result;
 	}
 	public int sampleFrom(double[] q){
@@ -167,7 +262,7 @@ public class LDA {
 	}
     public double[][] getParam(String paramName){
         // TODO:waiting
-        return null;
+		return paramName.endsWith("theta")?this.theta:this.phi;
     }
 
 	public static double array_sum(Object array){
@@ -214,10 +309,10 @@ public class LDA {
         }
     }
 	public static void test(){
-		int D = 100;
-		int V = 100;
-		int K = 10;
-		int Dlen = 20;
+		int D = 1000;
+		int V = 500;
+		int K = 100;
+		int Dlen = 100;
 		LDA model = new LDA(2000000,1.0,0.01,K);
 		int[] wArray = new int[D*Dlen];
 		int[] dArray = new int[D*Dlen];
@@ -228,28 +323,28 @@ public class LDA {
 		}
 
 		model.fit(wArray,dArray);
+		System.out.println(Arrays.toString(model.phi));
+		System.out.println(Arrays.toString(model.theta));
 	}
 	public static void test_fit(){
-		int D = 4;
+		int D = 2;
 		int V = 2;
 		int K = 2;
-		int Dlen = 4;
-		LDA model = new LDA(10,1.0,0.1,K);
+		int Dlen = 3;
+		LDA model = new LDA(100,1.0,0.1,K);
 		int[] wArray = {
-				0, 0, 0, 1,
-				0, 0, 0, 1,
-				1, 1, 1, 0,
-				1, 1, 1, 0
+				 0, 0,0, 1,
+				 1, 1,1, 0
 		};
 		int[] dArray = {
-				0, 0, 0, 0,
-				1, 1, 1, 1,
-				2, 2, 2, 2,
-				3, 3, 3, 3
+				0, 0, 0,0,
+				1, 1, 1,1
 		};
 		model.fit(wArray,dArray);
+		System.out.println(Arrays.toString(model.phi));
+		System.out.println(Arrays.toString(model.theta));
 	}
 	public static void main(String[] a){
-		test_fit();
+		test();
 	}
 }
