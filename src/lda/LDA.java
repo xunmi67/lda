@@ -1,5 +1,7 @@
 package lda;
 
+import java.lang.reflect.Array;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Random;
 import org.apache.commons.math3.special.Gamma;
@@ -113,7 +115,7 @@ public class LDA {
 							continue;
 						}
 						// TODO:use logger
-						System.out.println(lastTenLikehood+" new:"+thisTenLikehood);
+						System.out.println("not converged:"+lastTenLikehood+" new:"+thisTenLikehood);
 						lastTenLikehood = thisTenLikehood * 10;
 						thisAdded = 0;
 						thisTenLikehood = 0.0;
@@ -149,19 +151,55 @@ public class LDA {
 		//start cal theta and phi
 		// TODO:use logger instead
 		System.out.println("starting cal theta");
-		theta_mat.scalarMultiply(1.0/steadyCount);
-		phi_mat.scalarMultiply(1.0/steadyCount);
-		theta_mat.scalarAdd(alpha);
-		phi_mat.scalarAdd(beta);
+		theta_mat = theta_mat.scalarMultiply(1.0/steadyCount);
+		phi_mat  = phi_mat.scalarMultiply(1.0/steadyCount);
+		theta_mat = theta_mat.scalarAdd(alpha);
+		phi_mat = phi_mat.scalarAdd(beta);
 		//phi_mat.sum(1). Get row sum of mat
 		RealVector theta_sum = theta_mat.operate(new ArrayRealVector(K,1.0));
 		RealVector phi_sum = phi_mat.operate(new ArrayRealVector(V,1.0));
+		for(int i=0;i<theta_sum.getDimension();i++)
+			theta_sum.setEntry(i,1.0/theta_sum.getEntry(i));
+		for(int i = 0;i<phi_sum.getDimension();i++)
+			phi_sum.setEntry(i,1.0/phi_sum.getEntry(i));
 		theta_mat = new DiagonalMatrix(theta_sum.toArray()).multiply(theta_mat);
 		phi_mat = new DiagonalMatrix(phi_sum.toArray()).multiply(phi_mat);
 		this.theta = theta_mat.getData();
 		this.phi = phi_mat.getData();
     }
 
+	/**
+	 * convert X into int[2][],int[0] is wArray,int[1] is dArray[]
+	 * @param X X[d][i] represent word i in document d
+	 * @return int[0] is wArray,int[1] is dArray[]
+     */
+	public static int[][] convert2Arrays(int[][] X){
+		ArrayList<Integer> wArrayList = new ArrayList<>();
+		ArrayList<Integer> dArrayList = new ArrayList<>();
+		for(int d = 0;d<X.length;d++)
+			for(int w=0;w<X[0].length;w++)
+				for(int count=0;count<X[d][w];count--)
+				{
+					wArrayList.add(w);
+					dArrayList.add(d);
+				}
+		int[][] result = new int[2][];
+		result[0] = new int[wArrayList.size()];
+		result[1] = new int[dArrayList.size()];
+		for(int i=0;i<wArrayList.size();i++)
+			result[0][i] = wArrayList.get(i);
+		for(int i=0;i<dArrayList.size();i++)
+			result[1][i] = dArrayList.get(i);
+		return result;
+	}
+	/**
+	 * transfer X to wArray and dArray ,and fit(wArray,dArray)
+	 * @param X X[d][i] represent how many times word i occured in document d
+     */
+	public void fit(int[][] X){
+		int[][] wdArray = convert2Arrays(X);
+		fit(wdArray[0],wdArray[1]);
+	}
 
 	/**
 	 * cal log likehood of p(z,w)
@@ -311,7 +349,7 @@ public class LDA {
 	public static void test(){
 		int D = 1000;
 		int V = 500;
-		int K = 100;
+		int K = 50;
 		int Dlen = 100;
 		LDA model = new LDA(2000000,1.0,0.01,K);
 		int[] wArray = new int[D*Dlen];
@@ -323,28 +361,32 @@ public class LDA {
 		}
 
 		model.fit(wArray,dArray);
-		System.out.println(Arrays.toString(model.phi));
-		System.out.println(Arrays.toString(model.theta));
+		for(double[] phi_k:model.phi)
+			System.out.println(Arrays.deepToString(model.phi));
+		for(double[] theta_k:model.theta)
+			System.out.println(Arrays.deepToString(model.theta));
 	}
 	public static void test_fit(){
 		int D = 2;
 		int V = 2;
 		int K = 2;
-		int Dlen = 3;
-		LDA model = new LDA(100,1.0,0.1,K);
+		int Dlen = 5;
+		LDA model = new LDA(500,1.0,0.1,K);
 		int[] wArray = {
-				 0, 0,0, 1,
-				 1, 1,1, 0
+				 0, 0,0,0, 1,
+				 1, 1,1, 1,0
 		};
 		int[] dArray = {
-				0, 0, 0,0,
-				1, 1, 1,1
+				0, 0, 0,0,0,
+				1, 1, 1,1,1
 		};
 		model.fit(wArray,dArray);
-		System.out.println(Arrays.toString(model.phi));
-		System.out.println(Arrays.toString(model.theta));
+		System.out.print("\nphi:\n");
+			System.out.println(Arrays.deepToString(model.phi));
+		System.out.print("theta:\n");
+			System.out.println(Arrays.deepToString(model.theta));
 	}
 	public static void main(String[] a){
-		test();
+		test_fit();
 	}
 }
