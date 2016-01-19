@@ -11,7 +11,9 @@ import org.apache.commons.math3.linear.*;
  * Created by found on 1/15/16.
  */
 public class LDA {
+	public static Random rd = new Random(System.currentTimeMillis());
 	int MAX_STEADY = 100;
+	double DIFF = 0.0000001;
     int[] wArray = null;
     int[] dArray = null;
     int[] zArray = null;
@@ -26,7 +28,7 @@ public class LDA {
     double alpha = 0;
     double beta = 0;
     int V,K,D;
-	Random rd = new Random(System.currentTimeMillis());
+
 
     public LDA(int nIter,double alpha,double beta,int K){
         this.nIter = nIter;
@@ -45,6 +47,7 @@ public class LDA {
 		this.dArray = dArray;
         V = wArray[array_max(wArray)]+1;
         D = dArray[array_max(dArray)]+1;
+		System.out.println("Vocabulary:"+V+"\t doc:"+D);
 		zArray = new int[wArray.length];
 		theta = new double[D][K];
 		RealMatrix theta_mat = new Array2DRowRealMatrix(D,K);
@@ -89,26 +92,27 @@ public class LDA {
 				sumK[z]--;
 				n_k[z]--;
 				n_d[d]--;
-				int newz = sampleFrom(calp(i));
+				double[] p = calp(i);
+				int newz = sampleFrom(p);
 				zArray[i] = newz;
 				n_k_w[newz][w]++;
 				n_d_k[d][newz]++;
-				sumK[z]++;
-				n_k[z]++;
+				sumK[newz]++;
+				n_k[newz]++;
 				n_d[d]++;
 			}
 			if((sp%10 ==0 || judgeSteady) && !isSteady) {
 				if (judgeSteady) {
 					if(lastAdded<10){
-						lastTenLikehood += likehood();
+						lastTenLikehood += log_likehood();
 						lastAdded++;
 					}else if(thisAdded < 10){
-						thisTenLikehood += likehood();
+						thisTenLikehood += log_likehood();
 						thisAdded ++;
 					}else{
 						lastTenLikehood /= 10.0;
 						thisTenLikehood /= 10.0;
-						if(this.diff(lastTenLikehood,thisTenLikehood)<0.001||
+						if(this.diff(lastTenLikehood,thisTenLikehood)<DIFF||
 								thisTenLikehood<lastTenLikehood){
 							System.out.println(lastTenLikehood+" new:"+thisTenLikehood);
 							isSteady = true;
@@ -122,13 +126,15 @@ public class LDA {
 					}
 				} else {
 					// TODO:use logger
-					double lh = likehood();
+					double lh = log_likehood();
 					System.out.println("sampling " + sp +
-							"  likehood is:" + lh);
+							"  log_likehood is:" + lh);
+					System.out.println("sampling " + sp +
+							"  likehood is:" + likehood());
 					long t1 = System.currentTimeMillis();
 					System.out.println("using time:" + (t1 - t0) / 1000.0);
 					t0 = t1;
-					if (this.diff(previousLh,lh)<0.001 || lh < previousLh) {
+					if (sp>nIter/2&&(this.diff(previousLh,lh)<DIFF || lh < previousLh) ) {
 						judgeSteady = true;
 					}
 					previousLh = lh;
@@ -246,17 +252,13 @@ public class LDA {
 		ArrayRealVector alpha_v = new ArrayRealVector(K,alpha);
 		for(int i=0;i<K;i++){
 			RealVector n_k_beta = n_k_w_mat.getRowVector(i).add(beta_v);
-			System.out.println("n_k+beta:"+n_k_beta);
 			ll += ( log_delta(n_k_beta.toArray()) - log_delta(beta_v.toArray()) );
 		}
 		double ll0 = ll;
-		System.out.println("p(w|z):"+ll);
 		for(int d=0;d < D;d++){
 			RealVector n_d_alpha = n_m_k_mat.getRowVector(d).add(alpha_v);
-			System.out.println("n_m+al:"+n_d_alpha);
 			ll += ( log_delta(n_d_alpha.toArray()) - log_delta(alpha_v.toArray()));
 		}
-		System.out.println("p(z):"+(ll-ll0));
 		return  ll;
 	}
 	/**
@@ -264,7 +266,7 @@ public class LDA {
 	 * @param alpha
 	 * @return
      */
-	protected double log_delta(double[] alpha){
+	protected static double log_delta(double[] alpha){
 		double result = 0.0;
 		for(int i=0;i<alpha.length;i++){
 			result += Gamma.logGamma(alpha[i]);
@@ -275,7 +277,8 @@ public class LDA {
 		result -= Gamma.logGamma(sum_a);
 		return result;
 	}
-	public int sampleFrom(double[] q){
+	public static int sampleFrom(double[] q){
+		q = q.clone();
 		for(int i=1;i<q.length;i++){
 			q[i] += q[i-1];
 		}
@@ -291,6 +294,8 @@ public class LDA {
 		double qsum = 0.0;
 		for(int k=0;k<K;k++){
 			q[k] = (n_d_k[dArray[i]][k]+alpha) * (n_k_w[k][wArray[i]]+beta) / sumK[k];
+			double sumK_k = array_sum(n_k_w[k])+ V*beta;
+			assert Math.abs(sumK_k-sumK[k])<0.00001;
 			qsum += q[k];
 		}
 		for(int k=0;k<K;k++){
@@ -298,6 +303,7 @@ public class LDA {
 		}
 		return q;
 	}
+
     public double[][] getParam(String paramName){
         // TODO:waiting
 		return paramName.endsWith("theta")?this.theta:this.phi;
@@ -366,6 +372,14 @@ public class LDA {
 		for(double[] theta_k:model.theta)
 			System.out.println(Arrays.deepToString(model.theta));
 	}
+	public  static void test_sample(){
+		double[] p = {0.1,0.4,0.4,0.1};
+		double[] count = new double[4];
+		for(int i = 0;i<10000;i++){
+			count[sampleFrom(p)] ++;
+		}
+		System.out.print(Arrays.toString(count));
+	}
 	public static void test_fit(){
 		int D = 2;
 		int V = 2;
@@ -386,7 +400,19 @@ public class LDA {
 		System.out.print("theta:\n");
 			System.out.println(Arrays.deepToString(model.theta));
 	}
+	public static double[] test_calq(double[] n_m_i,double alfa,
+								double[] n_k_i,double beta,int K,int V){
+
+		return null;
+	}
+	public static void test_logdelta(){
+		double l1 = log_delta(new double[]{1,1,1});
+		double l2 = log_delta(new double[]{2,2,2});
+		System.out.println(Math.exp(l1));
+		System.out.println(Math.exp(l2));
+
+	}
 	public static void main(String[] a){
-		test_fit();
+		test();
 	}
 }

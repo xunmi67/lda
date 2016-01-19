@@ -1,9 +1,11 @@
 package lda;
 
+import myUtils.arrays.ArrayIndexPair;
+
 import java.io.BufferedReader;
-import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
+import java.lang.reflect.Array;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -14,12 +16,30 @@ import java.util.HashMap;
 public class TestLDA {
     public static void testFit() throws IOException {
         int [][] x = readX("tfs.txt");
-        int K = 20;
-        lda.LDA model = new LDA(10000,50.0/K,0.01,K);
+        String[] words = readW("words.txt");
+        int K = 10;
+        lda.LDA model = new LDA(1000,50.0/K,0.01,K);
         model.fit(x);
         double[][] phi = model.phi;
+        ArrayIndexPair<Double>[][] phiWithIndex =
+        (ArrayIndexPair<Double>[][])Array.newInstance(new ArrayIndexPair<Double>(1.0,1).getClass(),phi.length,phi[0].length);
+        int t = 0;
         for(double[] topic:phi){
-            Arrays.sort(topic);
+            for(int i = 0;i<topic.length;i++){
+                phiWithIndex[t][i] = new ArrayIndexPair<Double>(topic[i],i);
+            }
+            t++;
+        }
+        for(ArrayIndexPair<Double>[] phi_k:phiWithIndex){
+            Arrays.sort(phi_k);
+        }
+        for(int k = 0;k<phiWithIndex.length;k++){
+            System.out.println("\ntopic "+k+":\n");
+            for(int i = phiWithIndex[0].length-10;i<phiWithIndex[0].length;i++){
+                System.out.print(
+                        phiWithIndex[k][i].getItem()+":"+
+                        words[phiWithIndex[k][i].getIndex()]+"\t");
+            }
         }
 
     }

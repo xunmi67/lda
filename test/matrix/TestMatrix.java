@@ -1,5 +1,6 @@
 package matrix;
 import org.apache.commons.math3.linear.*;
+import org.apache.commons.math3.special.Gamma;
 
 import java.util.Arrays;
 
@@ -13,6 +14,9 @@ public class TestMatrix {
         wd[1] = new int[] {3,4};
     }
     public static void main(String argss[]){
-        test1();
+        double ga = Gamma.gamma(3);
+        double log_ga = Gamma.logGamma(3);
+        System.out.print("ga:"+ga+"\tlog:"+log_ga);
+
     }
 }
