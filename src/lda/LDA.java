@@ -1,6 +1,5 @@
 package lda;
 
-import java.lang.reflect.Array;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Random;
@@ -47,6 +46,7 @@ public class LDA {
 		this.dArray = dArray;
         V = wArray[array_max(wArray)]+1;
         D = dArray[array_max(dArray)]+1;
+		// TODO:user logger
 		System.out.println("Vocabulary:"+V+"\t doc:"+D);
 		zArray = new int[wArray.length];
 		theta = new double[D][K];
@@ -114,6 +114,7 @@ public class LDA {
 						thisTenLikehood /= 10.0;
 						if(this.diff(lastTenLikehood,thisTenLikehood)<DIFF||
 								thisTenLikehood<lastTenLikehood){
+							// TODO:use logger
 							System.out.println(lastTenLikehood+" new:"+thisTenLikehood);
 							isSteady = true;
 							continue;
@@ -127,8 +128,6 @@ public class LDA {
 				} else {
 					// TODO:use logger
 					double lh = log_likehood();
-					System.out.println("sampling " + sp +
-							"  log_likehood is:" + lh);
 					System.out.println("sampling " + sp +
 							"  likehood is:" + likehood());
 					long t1 = System.currentTimeMillis();
@@ -211,7 +210,7 @@ public class LDA {
 	 * cal log likehood of p(z,w)
 	 * 	= Σ(Δ(n_k + beta)/Δ(beta))+Σ(Δ(n_M+alfa)/Δ(alfa))
 	 * 	can reference to:https://github.com/ariddell/lda/blob/develop/lda/_lda.pyx
-	 * @return
+	 * @return log_lh
      */
 	protected  double diff(double d1,double d2){
 		return Math.abs( (d2-d1) / d1 );
@@ -254,7 +253,6 @@ public class LDA {
 			RealVector n_k_beta = n_k_w_mat.getRowVector(i).add(beta_v);
 			ll += ( log_delta(n_k_beta.toArray()) - log_delta(beta_v.toArray()) );
 		}
-		double ll0 = ll;
 		for(int d=0;d < D;d++){
 			RealVector n_d_alpha = n_m_k_mat.getRowVector(d).add(alpha_v);
 			ll += ( log_delta(n_d_alpha.toArray()) - log_delta(alpha_v.toArray()));
@@ -263,13 +261,13 @@ public class LDA {
 	}
 	/**
 	 * cal delta function(alpha), Δ(α)=ΣΓ(α_i) / Γ(Σα_i)
-	 * @param alpha
-	 * @return
+	 * @param alpha array
+	 * @return lnΔ(α)
      */
 	protected static double log_delta(double[] alpha){
 		double result = 0.0;
-		for(int i=0;i<alpha.length;i++){
-			result += Gamma.logGamma(alpha[i]);
+		for (double anAlpha : alpha) {
+			result += Gamma.logGamma(anAlpha);
 		}
 		double sum_a = 0.;
 		for(double a_i:alpha)
@@ -304,10 +302,6 @@ public class LDA {
 		return q;
 	}
 
-    public double[][] getParam(String paramName){
-        // TODO:waiting
-		return paramName.endsWith("theta")?this.theta:this.phi;
-    }
 
 	public static double array_sum(Object array){
 		if(array instanceof int[]){
@@ -336,14 +330,14 @@ public class LDA {
             return maxi;
         }else if(array instanceof double[]){
             int maxi = 0;
-            int[] iarray = (int[]) array;
+            double[] iarray = (double[]) array;
             for(int i=0;i<iarray.length;i++){
                 maxi = iarray[i]>iarray[maxi]?i:maxi;
             }
             return maxi;
         }else if(array instanceof float[]){
             int maxi = 0;
-            int[] iarray = (int[]) array;
+            float[] iarray = (float[]) array;
             for(int i=0;i<iarray.length;i++){
                 maxi = iarray[i]>iarray[maxi]?i:maxi;
             }
@@ -352,67 +346,67 @@ public class LDA {
             return -1;
         }
     }
-	public static void test(){
-		int D = 1000;
-		int V = 500;
-		int K = 50;
-		int Dlen = 100;
-		LDA model = new LDA(2000000,1.0,0.01,K);
-		int[] wArray = new int[D*Dlen];
-		int[] dArray = new int[D*Dlen];
-		for(int i = 0;i < D*Dlen;i ++)
-		{
-			wArray[i] = model.rd.nextInt(V);
-			dArray[i] = model.rd.nextInt(D);
-		}
-
-		model.fit(wArray,dArray);
-		for(double[] phi_k:model.phi)
-			System.out.println(Arrays.deepToString(model.phi));
-		for(double[] theta_k:model.theta)
-			System.out.println(Arrays.deepToString(model.theta));
-	}
-	public  static void test_sample(){
-		double[] p = {0.1,0.4,0.4,0.1};
-		double[] count = new double[4];
-		for(int i = 0;i<10000;i++){
-			count[sampleFrom(p)] ++;
-		}
-		System.out.print(Arrays.toString(count));
-	}
-	public static void test_fit(){
-		int D = 2;
-		int V = 2;
-		int K = 2;
-		int Dlen = 5;
-		LDA model = new LDA(500,1.0,0.1,K);
-		int[] wArray = {
-				 0, 0,0,0, 1,
-				 1, 1,1, 1,0
-		};
-		int[] dArray = {
-				0, 0, 0,0,0,
-				1, 1, 1,1,1
-		};
-		model.fit(wArray,dArray);
-		System.out.print("\nphi:\n");
-			System.out.println(Arrays.deepToString(model.phi));
-		System.out.print("theta:\n");
-			System.out.println(Arrays.deepToString(model.theta));
-	}
-	public static double[] test_calq(double[] n_m_i,double alfa,
-								double[] n_k_i,double beta,int K,int V){
-
-		return null;
-	}
-	public static void test_logdelta(){
-		double l1 = log_delta(new double[]{1,1,1});
-		double l2 = log_delta(new double[]{2,2,2});
-		System.out.println(Math.exp(l1));
-		System.out.println(Math.exp(l2));
-
-	}
-	public static void main(String[] a){
-		test();
-	}
+//	public static void test(){
+//		int D = 1000;
+//		int V = 500;
+//		int K = 50;
+//		int Dlen = 100;
+//		LDA model = new LDA(2000000,1.0,0.01,K);
+//		int[] wArray = new int[D*Dlen];
+//		int[] dArray = new int[D*Dlen];
+//		for(int i = 0;i < D*Dlen;i ++)
+//		{
+//			wArray[i] = model.rd.nextInt(V);
+//			dArray[i] = model.rd.nextInt(D);
+//		}
+//
+//		model.fit(wArray,dArray);
+//		for(double[] phi_k:model.phi)
+//			System.out.println(Arrays.deepToString(model.phi));
+//		for(double[] theta_k:model.theta)
+//			System.out.println(Arrays.deepToString(model.theta));
+//	}
+//	public  static void test_sample(){
+//		double[] p = {0.1,0.4,0.4,0.1};
+//		double[] count = new double[4];
+//		for(int i = 0;i<10000;i++){
+//			count[sampleFrom(p)] ++;
+//		}
+//		System.out.print(Arrays.toString(count));
+//	}
+//	public static void test_fit(){
+//		int D = 2;
+//		int V = 2;
+//		int K = 2;
+//		int Dlen = 5;
+//		LDA model = new LDA(500,1.0,0.1,K);
+//		int[] wArray = {
+//				 0, 0,0,0, 1,
+//				 1, 1,1, 1,0
+//		};
+//		int[] dArray = {
+//				0, 0, 0,0,0,
+//				1, 1, 1,1,1
+//		};
+//		model.fit(wArray,dArray);
+//		System.out.print("\nphi:\n");
+//			System.out.println(Arrays.deepToString(model.phi));
+//		System.out.print("theta:\n");
+//			System.out.println(Arrays.deepToString(model.theta));
+//	}
+//	public static double[] test_calq(double[] n_m_i,double alfa,
+//								double[] n_k_i,double beta,int K,int V){
+//
+//		return null;
+//	}
+//	public static void test_logdelta(){
+//		double l1 = log_delta(new double[]{1,1,1});
+//		double l2 = log_delta(new double[]{2,2,2});
+//		System.out.println(Math.exp(l1));
+//		System.out.println(Math.exp(l2));
+//
+//	}
+//	public static void main(String[] a){
+//		test();
+//	}
 }
