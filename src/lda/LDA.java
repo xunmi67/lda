@@ -5,6 +5,8 @@ import java.util.Arrays;
 import java.util.Random;
 import org.apache.commons.math3.special.Gamma;
 import org.apache.commons.math3.linear.*;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 /**
  * Created by found on 1/15/16.
@@ -27,7 +29,7 @@ public class LDA {
     double alpha = 0;
     double beta = 0;
     int V,K,D;
-
+	private static final Logger logger = LogManager.getLogger();
 
     public LDA(int nIter,double alpha,double beta,int K){
         this.nIter = nIter;
@@ -46,8 +48,7 @@ public class LDA {
 		this.dArray = dArray;
         V = wArray[array_max(wArray)]+1;
         D = dArray[array_max(dArray)]+1;
-		// TODO:user logger
-		System.out.println("Vocabulary:"+V+"\t doc:"+D);
+		logger.info("start fitting:vocabulary:{},document:{},topic:{}",V,D,K);
 		zArray = new int[wArray.length];
 		theta = new double[D][K];
 		RealMatrix theta_mat = new Array2DRowRealMatrix(D,K);
@@ -114,24 +115,20 @@ public class LDA {
 						thisTenLikehood /= 10.0;
 						if(this.diff(lastTenLikehood,thisTenLikehood)<DIFF||
 								thisTenLikehood<lastTenLikehood){
-							// TODO:use logger
-							System.out.println(lastTenLikehood+" new:"+thisTenLikehood);
+							logger.info("converged,previous likehood:{},new likehood:{}",
+									lastTenLikehood,thisTenLikehood);
 							isSteady = true;
 							continue;
 						}
-						// TODO:use logger
-						System.out.println("not converged:"+lastTenLikehood+" new:"+thisTenLikehood);
+						logger.info("not converged:{}->{}",lastTenLikehood,thisTenLikehood);
 						lastTenLikehood = thisTenLikehood * 10;
 						thisAdded = 0;
 						thisTenLikehood = 0.0;
 					}
 				} else {
-					// TODO:use logger
 					double lh = log_likehood();
-					System.out.println("sampling " + sp +
-							"  likehood is:" + likehood());
 					long t1 = System.currentTimeMillis();
-					System.out.println("using time:" + (t1 - t0) / 1000.0);
+					logger.trace("sampling {},likehood is {},used time:{}",sp,lh,(t1 - t0) / 1000.0);
 					t0 = t1;
 					if (sp>nIter/2&&(this.diff(previousLh,lh)<DIFF || lh < previousLh) ) {
 						judgeSteady = true;
@@ -144,8 +141,7 @@ public class LDA {
 					theta_mat = theta_mat.add(new Array2DRowRealMatrix(n_d_k));
 					phi_mat = phi_mat.add(new Array2DRowRealMatrix(n_k_w));
 					if(steadyCount % 10 ==0){
-						// TODO:use logger instead
-						System.out.println("steady process:sampling "+steadyCount);
+						logger.trace("steady process:sampling the {}",steadyCount);
 					}
 					steadyCount++;
 				}else{
@@ -154,8 +150,7 @@ public class LDA {
 			}
 		}//burning over
 		//start cal theta and phi
-		// TODO:use logger instead
-		System.out.println("starting cal theta");
+		logger.info("cal theta and phi");
 		theta_mat = theta_mat.scalarMultiply(1.0/steadyCount);
 		phi_mat  = phi_mat.scalarMultiply(1.0/steadyCount);
 		theta_mat = theta_mat.scalarAdd(alpha);

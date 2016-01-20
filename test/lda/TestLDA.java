@@ -18,7 +18,7 @@ public class TestLDA {
         int [][] x = readX("tfs.txt");
         String[] words = readW("words.txt");
         int K = 10;
-        lda.LDA model = new LDA(1000,50.0/K,0.01,K);
+        lda.LDA model = new LDA(500,50.0/K,0.01,K);
         model.fit(x);
         double[][] phi = model.phi;
         ArrayIndexPair<Double>[][] phiWithIndex =
