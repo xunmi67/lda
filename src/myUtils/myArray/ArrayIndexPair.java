@@ -1,4 +1,4 @@
-package myUtils.arrays;
+package myUtils.myArray;
 
 /**
  * Created by found on 1/18/16.

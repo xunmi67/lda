@@ -1,6 +1,6 @@
 package lda;
 
-import myUtils.arrays.ArrayIndexPair;
+import myUtils.myArray.ArrayIndexPair;
 
 import java.io.BufferedReader;
 import java.io.FileReader;
