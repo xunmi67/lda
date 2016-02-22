@@ -64,7 +64,7 @@ public class Recommand {
         int[] test_items = Arrays.copyOfRange(recs[0],train_len,recs[0].length);
         int[] test_users = Arrays.copyOfRange(recs[1],train_len,recs[1].length);
         Itemcf model = new Itemcf();
-        model.fit(train_items,train_users,20);
+        model.fit(train_items,train_users,20,conn,"ml_50k");
         int U = model.U;
         for(int i = 0;i<U;i++){
            recList.put(i, model.getPreference(i,l) );
@@ -74,6 +74,7 @@ public class Recommand {
         log.debug("hits {},recall:{},precision:{}",hits,
                 hits/history.size(),hits/recList.size());
 
+        Conns.closeConnection(conn);
     }
 
     public static void main(String[] a) throws SQLException {

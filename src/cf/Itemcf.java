@@ -9,6 +9,9 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.*;
 
 /**
@@ -27,7 +30,18 @@ public class Itemcf {
     private Logger log = LogManager.getLogger();
     public Connection conn=null;
     public String tablename=null;
+    public String dbname = null;
 
+    public void fit(int[] item,int[] user,int K,Connection conn,String tablename){
+        this.conn = conn;
+        this.tablename = tablename;
+        try {
+           this.dbname = this.conn.getCatalog();
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        fit(item,user,K);
+    }
     /**
      * fit item cf model to data item-user
      * @param item array of items,item[i] was consumed by user[i]
@@ -148,7 +162,7 @@ public class Itemcf {
         }
         return relateItems.get(item);
     }
-    private void initHistory(){
+    private void initHistory() {
         historyOfItem = new ArrayList<>();
         historyOfUser = new ArrayList<>();
         for(int i = 0;i< I;i++){
@@ -167,8 +181,31 @@ public class Itemcf {
             });
         }else{
             String sql_getHisOfItem = "select distinct user from "+tablename+" where item=?";
-            for(int i=0;i<I;i++){
-
+            String sql_getHisOfUser =
+                    "select distinct item from "+tablename+" where user=?";
+            PreparedStatement pst = null;
+            try {
+                pst = conn.prepareStatement(sql_getHisOfItem);
+                for (int i = 0; i < I; i++) {
+                    pst.setInt(1,i);
+                    ResultSet rs = pst.executeQuery();
+                    while(rs.next()){
+                        historyOfItem.get(i).add(rs.getInt(1));
+                    }
+                }
+                pst.close();
+                pst = conn.prepareStatement(sql_getHisOfUser);
+                for(int i=0;i<U;i++){
+                    pst.setInt(1,i);
+                    ResultSet rs = pst.executeQuery();
+                    while(rs.next()){
+                        historyOfUser.get(i).add(rs.getInt(1));
+                    }
+                }
+                pst.close();
+            }catch (SQLException e){
+                log.debug(e.getMessage());
+                log.error("initial history error.");
             }
         }
     }
@@ -176,14 +213,39 @@ public class Itemcf {
      *
      */
     private void initRelateItems(){
-        relateItems = new ArrayList<>();
-        for(int i=0;i<this.I;i++)
-            relateItems.add(new HashSet<>());
-        for(int i=0;i<I;i++){
-            for(Integer relateUser:historyOfItem.get(i)){
-                relateItems.get(i).addAll(
-                        historyOfUser.get(relateUser)
-                );
+        if(this.tablename == null) {
+            relateItems = new ArrayList<>();
+            for (int i = 0; i < this.I; i++)
+                relateItems.add(new HashSet<>());
+            for (int i = 0; i < I; i++) {
+                for (Integer relateUser : historyOfItem.get(i)) {
+                    relateItems.get(i).addAll(
+                            historyOfUser.get(relateUser)
+                    );
+                }
+            }
+        }
+        else{
+            String sql_relateItems = "select item from ? " +
+                    "where user in select user from ? where item = ?";
+            try {
+                PreparedStatement pst = conn.prepareStatement(sql_relateItems);
+                relateItems = new ArrayList<>();
+                for (int i = 0; i < this.I; i++)
+                    relateItems.add(new HashSet<>());
+                for (int i = 0; i < this.I; i++) {
+                    pst.setString(1,this.tablename);
+                    pst.setString(2,this.tablename);
+                    pst.setInt(3,i);
+                    ResultSet rs = pst.executeQuery();
+                    Set<Integer> relate = relateItems.get(i);
+                    while(rs.next()){
+                        relate.add(rs.getInt(1));
+                    }
+
+                }
+            }catch (SQLException se){
+                log.error("sql error! "+se.getMessage());
             }
         }
     }
@@ -228,31 +290,35 @@ public class Itemcf {
     protected void calSimilarities(){
         //complete similarities matrix
         log.debug("starting calculate similar matrix");
-        for(int i=0;i<records.getColumnDimension();i++){
-            Set<Integer> relateItems = getRelateItems(i);
-            for(int relateItem:relateItems){
-                similarities.setEntry(i,relateItem,similarity(i,relateItem) );
-            }
-            if(i % 1 == 0)
-                log.debug("cal similar matrix of user"+i);
-        }
-        //compute similarItems list,use vistor
-        for(int i=0;i<I;i++){
-            similarItems.add(new TreeMap<Double,Integer>(new Comparator<Double>() {
-                @Override
-                public int compare(Double o, Double t1) {
-                    return 0-o.compareTo(t1);
+        if(conn==null) {
+            for (int i = 0; i < records.getColumnDimension(); i++) {
+                Set<Integer> relateItems = getRelateItems(i);
+                for (int relateItem : relateItems) {
+                    similarities.setEntry(i, relateItem, similarity(i, relateItem));
                 }
-            }));
-        }
-
-        similarities.walkInOptimizedOrder(new DefaultRealMatrixPreservingVisitor(){
-            @Override
-            public void visit(int row,int column,double value){
-                if(value > 0.0)
-                    similarItems.get(row).put(value,column);
+                if (i % 100 == 0)
+                    log.debug("cal similar matrix of user" + i);
             }
-        });
+            //compute similarItems list,use vistor
+            for (int i = 0; i < I; i++) {
+                similarItems.add(new TreeMap<Double, Integer>(new Comparator<Double>() {
+                    @Override
+                    public int compare(Double o, Double t1) {
+                        return 0 - o.compareTo(t1);
+                    }
+                }));
+            }
+
+            similarities.walkInOptimizedOrder(new DefaultRealMatrixPreservingVisitor() {
+                @Override
+                public void visit(int row, int column, double value) {
+                    if (value > 0.0)
+                        similarItems.get(row).put(value, column);
+                }
+            });
+        }else{
+
+        }
         log.debug("cal similarity over.");
     }
 
